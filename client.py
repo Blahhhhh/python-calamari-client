@@ -221,7 +221,9 @@ class CalamariConnection(requests.Session):
 
     def api_get(self, url, *args, **kwargs):
         url = self.get_api_path(url)
-        return self.get(url, *args, **kwargs)
+        response = self.get(url, *args, **kwargs)
+        response.raise_for_status()
+        return response.json()
 
 
 class CalamariAPIv1Connection(CalamariConnection, CalamariGraphiteMixin):
@@ -232,6 +234,36 @@ class CalamariAPIv1Connection(CalamariConnection, CalamariGraphiteMixin):
     """
     def __init__(self, host, username, password):
         super(CalamariAPIv1Connection, self).__init__(host, username, password, 'v1')
+
+    def info(self):
+        return self.api_get('/info')
+
+    def cluster_list(self):
+        return self.api_get('/cluster')
+
+    def cluster_health(self, fsid):
+        return self.api_get('/cluster/%s/health' % (fsid,))
+
+    def cluster_health_counters(self, fsid):
+        return self.api_get('/cluster/%s/health_counters' % (fsid,))
+
+    def cluster_space(self, fsid):
+        return self.api_get('/cluster/%s/space' % (fsid,))
+
+    def osd_list(self, fsid):
+        return self.api_get('/cluster/%s/osd' % (fsid,))
+
+    def osd_get(self, fsid, osd_id):
+        return self.api_get('/cluster/%s/osd/%s' % (fsid, osd_id))
+
+    def pool_list(self, fsid):
+        return self.api_get('/cluster/%s/pool' % (fsid,))
+
+    def pool_get(self, fsid, pool_id):
+        return self.api_get('/cluster/%s/pool/%s' % (fsid, pool_id))
+
+    def server_list(self, fsid):
+        return self.api_get('/cluster/%s/server' % (fsid,))
 
 
 class CalamariAPIv2Connection(CalamariConnection, CalamariGraphiteMixin):
@@ -244,9 +276,25 @@ class CalamariAPIv2Connection(CalamariConnection, CalamariGraphiteMixin):
         super(CalamariAPIv2Connection, self).__init__(host, username, password, 'v2')
 
 
-v1_connection = CalamariAPIv1Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
-v2_connection = CalamariAPIv2Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
+if __name__ == '__main__':
+    addStdoutHandler(LOG)
+    v1_connection = CalamariAPIv1Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
+    v2_connection = CalamariAPIv2Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
 
+    # v1 APIs manual test
+    for cluster in v1_connection.cluster_list():
+        # print v1_connection.cluster_health(cluster['id'])
+        # print v1_connection.cluster_health_counters(cluster['id'])
+        # print v1_connection.cluster_space(cluster['id'])
 
-addStdoutHandler(LOG)
+        # print v1_connection.osd_list(cluster['id'])
+        # for osd in v1_connection.osd_list(cluster['id'])['osds']:
+        #     print v1_connection.osd_get(cluster['id'], osd['uuid'])
+
+        # print v1_connection.pool_list(cluster['id'])
+        # for osd in v1_connection.pool_list(cluster['id']):
+        #     print v1_connection.pool_get(cluster['id'], osd['pool_id'])
+
+        # print v1_connection.server_list(cluster['id'])
+        pass
 
