@@ -2,6 +2,7 @@
 #-*- coding: utf-8 -*-
 
 import sys
+import json
 import logging
 
 import requests
@@ -14,7 +15,7 @@ CALAMARI_PASSWORD = 'root'
 LOG = logging.getLogger(__name__)
 
 
-def addStdoutHandler(logger):
+def add_stdout_handler(logger):
     logger.setLevel(logging.DEBUG)
     sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(logging.DEBUG)
@@ -210,13 +211,27 @@ class CalamariConnection(requests.Session):
         data = {'username': self.username, 'password': self.password}
         return super(CalamariConnection, self).post(url, data=data)
 
+    def logout(self):
+        LOG.info('Calamari %s connection logout.', self.api_version)
+        url = '%s/%s' % (self.host, self.get_api_path('auth/logout'))
+        return super(CalamariConnection, self).post(url)
+
     def get(self, url, *args, **kwargs):
         url = '%s/%s' % (self.host, url.lstrip('/'))
-        LOG.debug('Request for %s', url)
+        LOG.debug('GET request for %s', url)
         resp = super(CalamariConnection, self).get(url, *args, **kwargs)
         if resp.status_code == 403:
             self.authenticate()
             resp = super(CalamariConnection, self).get(url, *args, **kwargs)
+        return resp
+
+    def post(self, url, *args, **kwargs):
+        url = '%s/%s' % (self.host, url.lstrip('/'))
+        LOG.debug('POST request for %s', url)
+        resp = super(CalamariConnection, self).post(url, *args, **kwargs)
+        if resp.status_code == 403:
+            self.authenticate()
+            resp = super(CalamariConnection, self).post(url, *args, **kwargs)
         return resp
 
     def api_get(self, url, *args, **kwargs):
@@ -225,12 +240,18 @@ class CalamariConnection(requests.Session):
         response.raise_for_status()
         return response.json()
 
+    def api_post(self, url, *args, **kwargs):
+        url = self.get_api_path(url)
+        response = self.post(url, *args, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
 
 class CalamariAPIv1Connection(CalamariConnection, CalamariGraphiteMixin):
     """
     For v1 APIs only
 
-    v1 API list: https://github.com/ceph/calamari/blob/master/rest-api/calamari_rest/urls/v1.py
+    v1 API URL list: https://github.com/ceph/calamari/blob/master/rest-api/calamari_rest/urls/v1.py
     """
     def __init__(self, host, username, password):
         super(CalamariAPIv1Connection, self).__init__(host, username, password, 'v1')
@@ -271,30 +292,233 @@ class CalamariAPIv2Connection(CalamariConnection, CalamariGraphiteMixin):
     For v2 APIs only
 
     v2 API list: http://calamari.readthedocs.org/en/latest/calamari_rest/resources/resources.html
+    v2 API URL list: https://github.com/ceph/calamari/blob/master/rest-api/calamari_rest/urls/v2.py
     """
     def __init__(self, host, username, password):
         super(CalamariAPIv2Connection, self).__init__(host, username, password, 'v2')
 
+    def cli(self, fsid, command):
+        """ Ceph CLI access
+        """
+        data = {'command': command}
+        return self.api_post('/cluster/%s/cli' % (fsid,), data=json.dumps(data))
+
+    def cluster_list(self):
+        return self.api_get('/cluster')
+
+    def cluster_get(self, fsid):
+        return self.api_get('/cluster/%s' % (fsid,))
+
+    def cluster_config_list(self, fsid):
+        return self.api_get('/cluster/%s/config' % (fsid,))
+
+    def cluster_config_get(self, fsid, key):
+        return self.api_get('/cluster/%s/config/%s' % (fsid, key))
+
+    def cluster_crush_map(self, fsid):
+        return self.api_get('/cluster/%s/crush_map' % (fsid,))
+
+    def cluster_crush_node_list(self, fsid):
+        return self.api_get('/cluster/%s/crush_node' % (fsid,))
+
+    def cluster_crush_node_get(self, fsid, node_id):
+        return self.api_get('/cluster/%s/crush_node/%s' % (fsid, node_id))
+
+    def cluster_crush_rule_set(self, fsid):
+        return self.api_get('/cluster/%s/crush_rule_set' % (fsid,))
+
+    def cluster_crush_rule(self, fsid):
+        return self.api_get('/cluster/%s/crush_rule' % (fsid,))
+
+    def cluster_crush_type_list(self, fsid):
+        return self.api_get('/cluster/%s/crush_type' % (fsid,))
+
+    def cluster_crush_type_get(self, fsid, type_id):
+        return self.api_get('/cluster/%s/crush_type/%s' % (fsid, type_id))
+
+    def event_list(self):
+        return self.api_get('/event')
+
+    def cluster_event_list(self, fsid):
+        return self.api_get('/cluster/%s/event' % (fsid,))
+
+    def server_event_list(self, fqdn):
+        return self.api_get('/server/%s/event' % (fqdn,))
+
+    def info(self):
+        return self.api_get('/info')
+
+    def cluster_log_tail(self, fsid, lines=10):
+        params = {'lines': lines}
+        return self.api_get('/cluster/%s/log' % (fsid,), params=params)
+
+    def server_log_file_list(self, fqdn):
+        return self.api_get('/server/%s/log' % (fqdn,))
+
+    def server_log_file_tail(self, fqdn, log_path, lines=10):
+        params = {'lines': lines}
+        return self.api_get('/server/%s/log/%s' % (fqdn, log_path), params=params)
+
+    def cluster_mon_list(self, fsid):
+        return self.api_get('/cluster/%s/mon' % (fsid,))
+
+    def cluster_mon_get(self, fsid, mon_id):
+        return self.api_get('/cluster/%s/mon/%s' % (fsid, mon_id))
+
+    def cluster_mon_status(self, fsid, mon_id):
+        return self.api_get('/cluster/%s/mon/%s/status' % (fsid, mon_id))
+
+    def cluster_osd_config(self, fsid):
+        return self.api_get('/cluster/%s/osd_config' % (fsid,))
+
+    def cluster_osd_list(self, fsid):
+        return self.api_get('/cluster/%s/osd' % (fsid,))
+
+    def cluster_osd_get(self, fsid, osd_id):
+        return self.api_get('/cluster/%s/osd/%s' % (fsid, osd_id))
+
+    def cluster_pool_list(self, fsid):
+        return self.api_get('/cluster/%s/pool' % (fsid,))
+
+    def cluster_pool_get(self, fsid, pool_id):
+        return self.api_get('/cluster/%s/pool/%s' % (fsid, pool_id))
+
+    def request_list(self, state=None):
+        params = {}
+        if state:
+            params['state'] = state
+        return self.api_get('/request', params=params)
+
+    def request_get(self, request_id):
+        return self.api_get('/request/%s' % (request_id,))
+
+    def request_cancel(self, request_id):
+        return self.api_post('/request/%s/cancel' % (request_id,))
+
+    def cluster_request_list(self, fsid, state=None):
+        params = {}
+        if state:
+            params['state'] = state
+        return self.api_get('/cluster/%s/request' % (fsid,), params=params)
+
+    def cluster_request_get(self, fsid, request_id):
+        return self.api_get('/cluster/%s/request/%s' % (fsid, request_id))
+
+    def key_list(self):
+        return self.api_get('/key')
+
+    def key_get(self, minion_id):
+        return self.api_get('/key/%s' % (minion_id,))
+
+    def cluster_server_list(self, fsid):
+        return self.api_get('/cluster/%s/server' % (fsid,))
+
+    def cluster_server_get(self, fsid, fqdn):
+        return self.api_get('/cluster/%s/server/%s' % (fsid, fqdn))
+
+    def server_list(self):
+        return self.api_get('/server')
+
+    def server_get(self, fqdn):
+        return self.api_get('/server/%s' % (fqdn,))
+
+    def server_grains(self, fqdn):
+        return self.api_get('/server/%s/grains' % (fqdn,))
+
+    def cluster_sync_object_list(self, fsid):
+        return self.api_get('/cluster/%s/sync_object' % (fsid,))
+
+    def cluster_sync_object_get(self, fsid, sync_type):
+        return self.api_get('/cluster/%s/sync_object/%s' % (fsid, sync_type))
+
+    def user_list(self):
+        return self.api_get('/user')
+
+    def user_get(self, pk):
+        return self.api_get('/user/%s' % (pk,))
+
+    def grains(self):
+        return self.api_get('/grains')
+
 
 if __name__ == '__main__':
-    addStdoutHandler(LOG)
+    add_stdout_handler(LOG)
     v1_connection = CalamariAPIv1Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
     v2_connection = CalamariAPIv2Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
 
-    # v1 APIs manual test
-    for cluster in v1_connection.cluster_list():
-        # print v1_connection.cluster_health(cluster['id'])
-        # print v1_connection.cluster_health_counters(cluster['id'])
-        # print v1_connection.cluster_space(cluster['id'])
+    # # v1 APIs manual test
+    # for cluster in v1_connection.cluster_list():
+    #     # print v1_connection.cluster_health(cluster['id'])
+    #     # print v1_connection.cluster_health_counters(cluster['id'])
+    #     # print v1_connection.cluster_space(cluster['id'])
 
-        # print v1_connection.osd_list(cluster['id'])
-        # for osd in v1_connection.osd_list(cluster['id'])['osds']:
-        #     print v1_connection.osd_get(cluster['id'], osd['uuid'])
+    #     # print v1_connection.osd_list(cluster['id'])
+    #     # for osd in v1_connection.osd_list(cluster['id'])['osds']:
+    #     #     print v1_connection.osd_get(cluster['id'], osd['uuid'])
 
-        # print v1_connection.pool_list(cluster['id'])
-        # for osd in v1_connection.pool_list(cluster['id']):
-        #     print v1_connection.pool_get(cluster['id'], osd['pool_id'])
+    #     # print v1_connection.pool_list(cluster['id'])
+    #     # for osd in v1_connection.pool_list(cluster['id']):
+    #     #     print v1_connection.pool_get(cluster['id'], osd['pool_id'])
 
-        # print v1_connection.server_list(cluster['id'])
-        pass
+    #     # print v1_connection.server_list(cluster['id'])
+    #     pass
 
+    # # v2 APIs manual test
+    # print v2_connection.info()
+    # print v2_connection.event_list()
+    # print v2_connection.request_list()
+    # for key in v2_connection.key_list():
+    #     print v2_connection.key_get(key['id'])
+    # for user in v2_connection.user_list():
+    #     print v2_connection.user_get(user['id'])
+    # print v2_connection.grains()
+
+    # for cluster in v2_connection.cluster_list():
+    #     # print v2_connection.cli(cluster['id'], 'version')
+    #     # print v2_connection.cluster_get(cluster['id'])
+
+    #     # print v2_connection.cluster_config_list(cluster['id'])
+    #     # print v2_connection.cluster_config_get(cluster['id'], 'auth_mon_ticket_ttl')
+
+    #     # print v2_connection.cluster_crush_map(cluster['id'])
+    #     # for crush_node in v2_connection.cluster_crush_node_list(cluster['id']):
+    #     #     print v2_connection.cluster_crush_node_get(cluster['id'], crush_node['id'])
+    #     # print v2_connection.cluster_crush_rule_set(cluster['id'])
+    #     # print v2_connection.cluster_crush_rule(cluster['id'])
+    #     # for crush_type in v2_connection.cluster_crush_type_list(cluster['id']):
+    #     #     print v2_connection.cluster_crush_type_get(cluster['id'], crush_type['id'])
+    #     # print v2_connection.cluster_event_list(cluster['id'])
+
+    #     # print v2_connection.cluster_log_tail(cluster['id'], lines=20)['lines']
+
+    #     # for mon in v2_connection.cluster_mon_list(cluster['id']):
+    #     #     print v2_connection.cluster_mon_get(cluster['id'], mon['name'])
+    #     #     print v2_connection.cluster_mon_status(cluster['id'], mon['name'])
+
+    #     # print v2_connection.cluster_osd_config(cluster['id'])
+    #     # for osd in v2_connection.cluster_osd_list(cluster['id']):
+    #     #     print v2_connection.cluster_osd_get(cluster['id'], osd['id'])
+
+    #     # for pool in v2_connection.cluster_pool_list(cluster['id']):
+    #     #     print v2_connection.cluster_pool_get(cluster['id'], pool['id'])
+
+    #     # print v2_connection.cluster_request_list(cluster['id'])
+
+    #     # for server in v2_connection.cluster_server_list(cluster['id']):
+    #     #     print v2_connection.cluster_server_get(cluster['id'], server['fqdn'])
+
+    #     # for sync_object in v2_connection.cluster_sync_object_list(cluster['id']):
+    #     #     print v2_connection.cluster_sync_object_get(cluster['id'], sync_object)
+    #     pass
+
+    # for server in v2_connection.server_list():
+    #     # print v2_connection.server_event_list(server['fqdn'])
+    #     # server_log_files = v2_connection.server_log_file_list(server['fqdn'])
+    #     # print v2_connection.server_log_file_tail(server['fqdn'], server_log_files[0])
+
+    #     # print v2_connection.server_get(server['fqdn'])
+    #     # print v2_connection.server_grains(server['fqdn'])
+    #     pass
+
+    v1_connection.logout()
+    v2_connection.logout()
