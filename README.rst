@@ -12,27 +12,19 @@ Project `Romana <https://github.com/ceph/romana>`_ (former `calamari-clients <ht
 How to use
 ----------
 
-Initialize a v1 client with graphite mixin
-
 .. code-block:: python
 
-    v1_connection = CalamariAPIv1Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
+    import calamari_client as cc
 
-Initialize a v2 client with graphite mixin
+    # Initialize a v1 client with graphite mixin
+    v1_connection = cc.CalamariAPIv1Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
 
-.. code-block:: python
+    # Initialize a v2 client with graphite mixin
+    v2_connection = cc.CalamariAPIv2Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
 
-    v2_connection = CalamariAPIv2Connection(CALAMARI_HOST, CALAMARI_USERNAME, CALAMARI_PASSWORD)
-
-Get Ceph cluster info
-
-.. code-block:: python
-
+    # Get Ceph cluster info
     print v2_connection.info()
 
-Get cluster iops data in recent 24 hours
-
-.. code-block:: python
-
+    # Get cluster iops data in recent 24 hours
     cluster = v2_connection.cluster_list()[0]
     print v2_connection.iops_data(cluster['id'])

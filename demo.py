@@ -4,7 +4,7 @@
 import sys
 import logging
 
-from client import LOG, CalamariAPIv1Connection, CalamariAPIv2Connection
+from calamari_client import LOG, CalamariAPIv1Connection, CalamariAPIv2Connection
 
 
 CALAMARI_HOST = 'http://127.0.0.1/'
